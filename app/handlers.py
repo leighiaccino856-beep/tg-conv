@@ -1,4 +1,4 @@
-"""Обработчики: приём видео, скачивание, конвертация, отправка кружка."""
+"""Обработчики: приём видео, скачивание в RAM, конвертация, отправка кружка."""
 
 from __future__ import annotations
 
@@ -6,18 +6,20 @@ import asyncio
 import contextlib
 import html
 import logging
-import shutil
-import tempfile
-from pathlib import Path
 
 from aiogram import Bot, Router, types
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import FSInputFile
+from aiogram.types import BufferedInputFile
 
 from app import texts
 from app.config import settings
-from app.ffmpeg import FFmpegError, ConvertResult, convert_to_video_note, probe
-from app.media import guess_suffix, pick_media
+from app.convert import (
+    ConversionError,
+    ConvertResult,
+    convert_to_video_note,
+    probe_bytes,
+)
+from app.media import pick_media
 from app.utils import human_size
 
 router = Router(name="video")
@@ -64,7 +66,9 @@ async def _watch_progress(
         if percent < 5 or percent - shown < 5:
             continue
         shown = percent
-        await _safe_edit(status, texts.CONVERTING_PERCENT.format(percent=percent) + suffix)
+        await _safe_edit(
+            status, texts.CONVERTING_PERCENT.format(percent=percent) + suffix
+        )
 
 
 async def _send_note(
@@ -72,7 +76,7 @@ async def _send_note(
 ) -> None:
     await bot.send_video_note(
         chat_id=chat_id,
-        video_note=FSInputFile(result.path),
+        video_note=BufferedInputFile(result.data, filename="note.mp4"),
         duration=note_duration,
         length=settings.max_side,
     )
@@ -93,19 +97,28 @@ async def _process(
         return
 
     status = await message.reply(texts.DOWNLOADING)
-    workdir = Path(tempfile.mkdtemp(prefix="tgconv-"))
     chat_id = message.chat.id
 
     try:
-        source = workdir / f"input{guess_suffix(media)}"
-        await bot.download(media.file_id, destination=source, timeout=settings.download_timeout)
+        # destination=None -> aiogram складывает файл в BytesIO, диск не трогаем.
+        buffer = await bot.download(media.file_id, timeout=settings.download_timeout)
+        if buffer is None:  # pragma: no cover - на всякий случай
+            raise ConversionError("не удалось скачать файл")
+        try:
+            data = buffer.getvalue()
+        finally:
+            buffer.close()
 
-        info = await probe(source)
         log.info(
-            "видео от %s: %.1f с, %dx%d, звук=%s, вход %s",
+            "видео от %s: скачано %s в память",
             message.from_user.id if message.from_user else "?",
-            info.duration, info.width, info.height, info.has_audio,
-            human_size(file_size or source.stat().st_size),
+            human_size(len(data)),
+        )
+
+        info = await asyncio.to_thread(probe_bytes, data)
+        log.info(
+            "параметры: %.1f с, %dx%d, поворот %d°, звук=%s",
+            info.duration, info.width, info.height, info.rotation, info.has_audio,
         )
         if not info.has_video:
             await _safe_edit(status, texts.NO_VIDEO_STREAM)
@@ -115,7 +128,6 @@ async def _process(
         if info.duration > settings.max_duration + 0.05:
             suffix = texts.TRIMMED_NOTE.format(seconds=settings.max_duration)
 
-        output = workdir / "note.mp4"
         state = {"value": 0.0}
         watcher = asyncio.create_task(_watch_progress(status, state, suffix))
 
@@ -130,8 +142,11 @@ async def _process(
         try:
             async with _global_semaphore:
                 await _safe_edit(status, texts.CONVERTING + suffix)
-                result = await convert_to_video_note(
-                    source, output, info, max_bytes=settings.note_max_bytes, **convert_kwargs
+                result = await asyncio.to_thread(
+                    convert_to_video_note,
+                    data,
+                    max_bytes=settings.note_max_bytes,
+                    **convert_kwargs,
                 )
         finally:
             watcher.cancel()
@@ -154,11 +169,9 @@ async def _process(
                 human_size(result.size), settings.fallback_note_mb,
             )
             await _safe_edit(status, texts.CONVERTING + suffix)
-            smaller = workdir / "note-small.mp4"
-            result = await convert_to_video_note(
-                source,
-                smaller,
-                info,
+            result = await asyncio.to_thread(
+                convert_to_video_note,
+                data,
                 max_bytes=settings.fallback_note_bytes,
                 **convert_kwargs,
             )
@@ -170,11 +183,11 @@ async def _process(
             # В группе статус мог не удалиться (нет прав) — хотя бы пометим готовым.
             await _safe_edit(status, texts.DONE)
 
-    except FFmpegError as exc:
+    except ConversionError as exc:
         log.exception("ошибка конвертации")
         await _safe_edit(status, texts.CONVERT_FAILED.format(error=html.escape(str(exc))))
     except TimeoutError:
-        log.exception("таймаут обработки")
+        log.exception("таймаут скачивания")
         await _safe_edit(status, texts.TIMEOUT)
     except TelegramBadRequest:
         log.exception("Telegram отклонил запрос")
@@ -182,5 +195,3 @@ async def _process(
     except Exception:
         log.exception("непредвиденная ошибка при обработке видео")
         await _safe_edit(status, texts.UNKNOWN_ERROR)
-    finally:
-        await asyncio.to_thread(shutil.rmtree, workdir, True)

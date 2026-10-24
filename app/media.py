@@ -36,9 +36,3 @@ def pick_media(message: types.Message) -> MediaObject | None:
         if candidate.document is not None and is_video_document(candidate.document):
             return candidate.document
     return None
-
-
-def guess_suffix(media: MediaObject) -> str:
-    name = getattr(media, "file_name", None)
-    suffix = Path(name).suffix.lower() if name else ""
-    return suffix or ".mp4"

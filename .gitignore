@@ -9,9 +9,7 @@ env/
 # Окружение и секреты
 .env
 
-# Артефакты тестов/конвертации
-*.2pass-*.log
+# Тестовые артефакты
 *.mp4
-!tests/fixtures/*.mp4
 .pytest_cache/
 .ruff_cache/

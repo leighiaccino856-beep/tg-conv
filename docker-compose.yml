@@ -3,6 +3,7 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
-    # Если поднимаешь локальный Bot API server — замени на его адрес.
+    # Конвертация идёт в памяти: при больших MAX_INPUT_MB подними лимит.
+    # mem_limit: 1g
     # environment:
     #   TELEGRAM_API_SERVER: http://telegram-bot-api:8081
