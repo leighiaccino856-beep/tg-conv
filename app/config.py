@@ -43,6 +43,7 @@ class Settings:
 
     bot_token: str
     api_server: str | None
+    api_ip: str | None
     max_input_mb: int
     note_max_mb: float
     fallback_note_mb: float
@@ -72,6 +73,7 @@ class Settings:
         return cls(
             bot_token=_env_str("BOT_TOKEN"),
             api_server=api_server,
+            api_ip=_env_str("TELEGRAM_API_IP") or None,
             max_input_mb=_env_int("MAX_INPUT_MB", 20),
             note_max_mb=_env_float("NOTE_MAX_MB", 5.0),
             fallback_note_mb=_env_float("FALLBACK_NOTE_MB", 1.0),

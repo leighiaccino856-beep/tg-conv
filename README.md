@@ -59,6 +59,7 @@ python bot.py
 |---|---|---|
 | `BOT_TOKEN` | — | токен от @BotFather, обязателен |
 | `TELEGRAM_API_SERVER` | пусто | адрес локального Bot API server (снимает лимит 20 МБ) |
+| `TELEGRAM_API_IP` | пусто | прямой IP для `api.telegram.org` (обход блокировки) |
 | `MAX_INPUT_MB` | `20` | максимальный входной файл, МБ |
 | `NOTE_MAX_MB` | `5` | целевой размер кружка, МБ |
 | `FALLBACK_NOTE_MB` | `1` | на этот размер пережмёт, если Telegram откажет |
@@ -121,6 +122,21 @@ app/utils.py        форматирование размеров
 
 ## Если что-то не так
 
+- **`Cannot connect to host api.telegram.org`** — адрес Telegram заблокирован
+  провайдером (DNS отдаёт недоступный IP). Бот умеет ходить на конкретный адрес:
+
+  ```bash
+  curl.exe -sS --resolve api.telegram.org:443:149.154.167.220 https://api.telegram.org/
+  ```
+
+  Если в ответ пришёл `302` — впиши в `.env`:
+
+  ```env
+  TELEGRAM_API_IP=149.154.167.220
+  ```
+
+  Заданный IP используется первым, а обычный DNS остаётся запасным вариантом.
+  Альтернатива — VPN или системный прокси.
 - **`ffmpeg не найден`** — установи ffmpeg и добавь `bin` в `PATH`,
   либо поставь `imageio-ffmpeg`.
 - **`BOT_TOKEN не задан`** — скопируй `.env.example` в `.env`.
