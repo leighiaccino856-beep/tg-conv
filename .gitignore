@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Окружение и секреты
+.env
+
+# Артефакты тестов/конвертации
+*.2pass-*.log
+*.mp4
+!tests/fixtures/*.mp4
+.pytest_cache/
+.ruff_cache/
