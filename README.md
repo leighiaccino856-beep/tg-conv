@@ -73,7 +73,8 @@ ffmpeg в `PATH` требуется только для `scripts/selftest.py` (�
 ## Быстрый старт
 
 ```bash
-cd E:\code\tg-conv
+git clone https://github.com/leighiaccino856-beep/tg-conv.git
+cd tg-conv
 
 python -m venv .venv
 .venv\Scripts\activate          # Linux/macOS: source .venv/bin/activate
