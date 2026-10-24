@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import logging
 import math
@@ -124,7 +125,7 @@ def probe_bytes(data: bytes) -> MediaInfo:
                 has_audio=audio is not None,
                 rotation=rotation,
             )
-    except av.FFmpegError as exc:
+    except (av.FFmpegError, OSError, ValueError) as exc:
         raise ConversionError(f"не удалось прочитать видео: {exc}") from exc
 
 
@@ -155,9 +156,13 @@ def plan_bitrate(
 
 
 def _target_side(info: MediaInfo, side: int) -> int:
-    target = min(side, info.width, info.height)
+    # Если проба не дала размеров, ориентируемся на запрошенную сторону.
+    width = info.width or side
+    height = info.height or side
+    target = min(side, width, height)
     target -= target % 2
-    return max(target, 2)
+    # Меньше 16 px x264 не кодирует, да и кружок из этого не выйдет.
+    return max(target, 16)
 
 
 def _video_graph(
@@ -202,7 +207,6 @@ def _encode_once(
     info: MediaInfo,
     *,
     duration: float,
-    trim: bool,
     side: int,
     fps: int,
     preset: str,
@@ -230,6 +234,7 @@ def _encode_once(
         graph = _video_graph(video_in, rotation, side, fps)
 
         container = av.open(output, mode="w", format="mp4")
+        frames_written = 0
         try:
             video_out = container.add_stream("libx264", rate=fps)
             video_out.width = target
@@ -251,6 +256,7 @@ def _encode_once(
                 resampler = av.AudioResampler(format="fltp", layout="mono", rate=44100)
 
             def flush_video() -> None:
+                nonlocal frames_written
                 while True:
                     try:
                         frame = graph.pull()
@@ -258,6 +264,7 @@ def _encode_once(
                         return
                     for packet in video_out.encode(frame):
                         container.mux(packet)
+                    frames_written += 1
 
             streams = [video_in] + ([audio_in] if audio_in is not None else [])
             video_done = False
@@ -313,10 +320,21 @@ def _encode_once(
                         container.mux(packet)
                 for packet in audio_out.encode(None):
                     container.mux(packet)
+
+            if frames_written == 0:
+                raise ConversionError("в видео не нашлось ни одного кадра")
         except av.FFmpegError as exc:
             raise ConversionError(f"ошибка кодирования: {exc}") from exc
-        finally:
+        except BaseException:
+            # Ошибка закрытия не должна маскировать исходную проблему.
+            with contextlib.suppress(Exception):
+                container.close()
+            raise
+
+        try:
             container.close()
+        except av.FFmpegError as exc:
+            raise ConversionError(f"не удалось собрать MP4: {exc}") from exc
 
     return output.getvalue(), target
 
@@ -362,7 +380,6 @@ def convert_to_video_note(
             data,
             info,
             duration=duration,
-            trim=trim,
             side=side,
             fps=fps,
             preset=preset,
@@ -372,8 +389,10 @@ def convert_to_video_note(
             on_progress=on_progress,
         )
         last_size = len(encoded)
+        if last_size == 0:
+            raise ConversionError("получился пустой файл")
 
-        if 0 < last_size <= max_bytes:
+        if last_size <= max_bytes:
             return ConvertResult(
                 data=encoded,
                 width=target,
@@ -384,7 +403,7 @@ def convert_to_video_note(
                 attempts=attempt,
             )
 
-        overshoot = (last_size or max_bytes * 2) / max_bytes
+        overshoot = last_size / max_bytes
         shrink *= max(0.55, min(0.9, 0.95 / overshoot))
         log.warning(
             "кружок вышел на %d байт при лимите %d — сжимаю сильнее (%.2f)",

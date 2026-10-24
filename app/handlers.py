@@ -6,9 +6,10 @@ import asyncio
 import contextlib
 import html
 import logging
+import weakref
 
 from aiogram import Bot, Router, types
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import BufferedInputFile
 
 from app import texts
@@ -27,7 +28,7 @@ log = logging.getLogger(__name__)
 
 # Одновременных конвертаций на весь бот и не больше одной на пользователя.
 _global_semaphore = asyncio.Semaphore(max(1, settings.max_concurrent))
-_user_locks: dict[int, asyncio.Lock] = {}
+_user_locks: weakref.WeakValueDictionary[int, asyncio.Lock] = weakref.WeakValueDictionary()
 
 
 async def _has_video(message: types.Message) -> bool:
@@ -51,7 +52,8 @@ async def on_video(message: types.Message, bot: Bot) -> None:
 
 
 async def _safe_edit(status: types.Message, text: str) -> None:
-    with contextlib.suppress(TelegramBadRequest):
+    # Сообщение могли удалить, или Telegram ответил флуд-контролем — не критично.
+    with contextlib.suppress(TelegramAPIError):
         await status.edit_text(text)
 
 
@@ -72,13 +74,16 @@ async def _watch_progress(
 
 
 async def _send_note(
-    bot: Bot, chat_id: int, result: ConvertResult, note_duration: int
+    bot: Bot, chat_id: int, result: ConvertResult, note_duration: int | None
 ) -> None:
+    extra: dict[str, int] = {}
+    if note_duration:
+        extra["duration"] = note_duration
     await bot.send_video_note(
         chat_id=chat_id,
         video_note=BufferedInputFile(result.data, filename="note.mp4"),
-        duration=note_duration,
-        length=settings.max_side,
+        length=result.width,
+        **extra,
     )
 
 
@@ -101,13 +106,19 @@ async def _process(
 
     try:
         # destination=None -> aiogram складывает файл в BytesIO, диск не трогаем.
-        buffer = await bot.download(media.file_id, timeout=settings.download_timeout)
+        try:
+            buffer = await bot.download(media.file_id, timeout=settings.download_timeout)
+        except TelegramBadRequest as exc:
+            # Сюда попадает и «file is too big» для файлов больше лимита Bot API.
+            raise ConversionError(f"Telegram не отдал файл: {exc.message}") from exc
         if buffer is None:  # pragma: no cover - на всякий случай
             raise ConversionError("не удалось скачать файл")
         try:
             data = buffer.getvalue()
         finally:
             buffer.close()
+        if not data:
+            raise ConversionError("файл пришёл пустым")
 
         log.info(
             "видео от %s: скачано %s в память",
@@ -158,7 +169,11 @@ async def _process(
             result.attempts, human_size(result.size), result.video_kbps,
         )
 
-        note_duration = max(1, int(round(min(info.duration, settings.max_duration))))
+        note_duration = (
+            max(1, min(settings.max_duration, int(round(result.duration))))
+            if info.duration > 0
+            else None
+        )
         try:
             await _send_note(bot, chat_id, result, note_duration)
         except TelegramBadRequest:
@@ -169,17 +184,18 @@ async def _process(
                 human_size(result.size), settings.fallback_note_mb,
             )
             await _safe_edit(status, texts.CONVERTING + suffix)
-            result = await asyncio.to_thread(
-                convert_to_video_note,
-                data,
-                max_bytes=settings.fallback_note_bytes,
-                **convert_kwargs,
-            )
+            async with _global_semaphore:
+                result = await asyncio.to_thread(
+                    convert_to_video_note,
+                    data,
+                    max_bytes=settings.fallback_note_bytes,
+                    **convert_kwargs,
+                )
             await _send_note(bot, chat_id, result, note_duration)
 
         try:
             await status.delete()
-        except TelegramBadRequest:
+        except TelegramAPIError:
             # В группе статус мог не удалиться (нет прав) — хотя бы пометим готовым.
             await _safe_edit(status, texts.DONE)
 

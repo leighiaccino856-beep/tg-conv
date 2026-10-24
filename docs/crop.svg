@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 620" width="980" height="620" role="img" aria-label="Как видео превращается в кружок: центральный квадрат, 640 на 640">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e40af"/>
+      <stop offset="0.6" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#7dd3fc"/>
+    </linearGradient>
+    <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4ade80"/>
+      <stop offset="1" stop-color="#15803d"/>
+    </linearGradient>
+    <g id="landscape">
+      <rect width="160" height="90" fill="url(#sky)"/>
+      <circle cx="121" cy="26" r="13" fill="#fde68a"/>
+      <path d="M0 66 Q28 38 58 60 T110 54 Q136 44 160 58 V90 H0 Z" fill="url(#hill)"/>
+      <path d="M0 80 Q36 60 74 76 T160 72 V90 H0 Z" fill="#166534"/>
+      <path d="M18 30 q5 -6 10 0 M31 26 q5 -6 10 0" stroke="#e0f2fe" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    </g>
+    <g id="portrait">
+      <rect width="90" height="160" fill="url(#sky)"/>
+      <circle cx="61" cy="40" r="11" fill="#fde68a"/>
+      <path d="M0 108 Q22 82 42 102 T90 96 V160 H0 Z" fill="url(#hill)"/>
+      <path d="M0 134 Q28 116 54 132 T90 126 V160 H0 Z" fill="#166534"/>
+      <path d="M12 62 q4 -5 8 0 M23 58 q4 -5 8 0" stroke="#e0f2fe" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    </g>
+    <clipPath id="note1"><circle cx="599" cy="167" r="99"/></clipPath>
+    <clipPath id="note2"><circle cx="599" cy="445" r="99"/></clipPath>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="979" height="619" rx="16" fill="#ffffff" stroke="#e5e7eb"/>
+
+  <g font-family="'Segoe UI', system-ui, -apple-system, Arial, sans-serif">
+    <!-- ── ряд 1: горизонтальное видео ────────────────────────────────── -->
+    <text x="48" y="50" font-size="15" font-weight="700" fill="#111827">16:9 — исходник</text>
+    <text x="500" y="50" font-size="15" font-weight="700" fill="#111827">1:1 — кружок</text>
+
+    <svg x="48" y="68" width="352" height="198" viewBox="0 0 160 90">
+      <use href="#landscape"/>
+    </svg>
+    <rect x="48" y="68" width="77" height="198" fill="#0f172a" opacity="0.55"/>
+    <rect x="323" y="68" width="77" height="198" fill="#0f172a" opacity="0.55"/>
+    <rect x="125" y="68" width="198" height="198" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="10 7"/>
+
+    <line x1="424" y1="167" x2="478" y2="167" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+    <text x="451" y="150" font-size="12" fill="#6b7280" text-anchor="middle">кроп</text>
+    <text x="451" y="188" font-size="12" fill="#6b7280" text-anchor="middle">+ масштаб</text>
+
+    <g clip-path="url(#note1)">
+      <svg x="500" y="68" width="198" height="198" viewBox="35 0 90 90">
+        <use href="#landscape"/>
+      </svg>
+    </g>
+    <circle cx="599" cy="167" r="24" fill="#0f172a" opacity="0.35"/>
+    <path d="M592 155 L612 167 L592 179 Z" fill="#ffffff"/>
+
+    <text x="48" y="292" font-size="13" fill="#6b7280">1280×720, 12 секунд</text>
+    <text x="500" y="292" font-size="13" fill="#6b7280">640×640, H.264/AAC, до 60 секунд</text>
+
+    <!-- ── ряд 2: вертикальное видео с телефона ──────────────────────── -->
+    <text x="48" y="334" font-size="15" font-weight="700" fill="#111827">9:16 — вертикальное с телефона</text>
+
+    <svg x="48" y="352" width="112" height="198" viewBox="0 0 90 160">
+      <use href="#portrait"/>
+    </svg>
+    <rect x="48" y="352" width="112" height="43" fill="#0f172a" opacity="0.55"/>
+    <rect x="48" y="507" width="112" height="43" fill="#0f172a" opacity="0.55"/>
+    <rect x="48" y="395" width="112" height="112" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="10 7"/>
+
+    <line x1="424" y1="451" x2="478" y2="451" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+    <text x="451" y="434" font-size="12" fill="#6b7280" text-anchor="middle">кроп</text>
+    <text x="451" y="472" font-size="12" fill="#6b7280" text-anchor="middle">+ масштаб</text>
+
+    <g clip-path="url(#note2)">
+      <svg x="500" y="352" width="198" height="198" viewBox="0 35 90 90">
+        <use href="#portrait"/>
+      </svg>
+    </g>
+    <circle cx="599" cy="451" r="24" fill="#0f172a" opacity="0.35"/>
+    <path d="M592 439 L612 451 L592 463 Z" fill="#ffffff"/>
+
+    <text x="48" y="576" font-size="13" fill="#6b7280">720×1280, поворот из метаданных учитывается</text>
+    <text x="500" y="576" font-size="13" fill="#6b7280">640×640, тот же кружок</text>
+
+    <text x="48" y="604" font-size="12.5" fill="#9ca3af">Поля не добавляются: видео обрезается по центру, важное лучше держать в середине кадра.</text>
+  </g>
+</svg>

@@ -1,3 +1,4 @@
 aiogram>=3.13,<4
 python-dotenv>=1.0
-av>=14
+# PyAV 19 несёт libav/libx264 в колесе и требует Python 3.12+.
+av>=19,<20

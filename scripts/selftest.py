@@ -193,6 +193,18 @@ def check_media_detection() -> None:
     print("\n  OK  видео находится в сообщении, файле и ответе")
 
 
+def check_errors() -> None:
+    from app.convert import probe_bytes
+
+    for bad in (b"", b"this is definitely not a video"):
+        try:
+            probe_bytes(bad)
+        except ConversionError:
+            continue
+        raise AssertionError("битые данные должны давать ConversionError")
+    print("\n  OK  битые данные дают понятную ошибку")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="tgconv-selftest-") as tmp:
         work = Path(tmp)
@@ -231,6 +243,7 @@ def main() -> int:
 
         print("\nПроверяю распознавание медиа…")
         check_media_detection()
+        check_errors()
 
     print("\nВсе проверки пройдены ✅")
     return 0

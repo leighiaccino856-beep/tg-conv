@@ -128,35 +128,24 @@ async def main() -> None:
     bot = _build_bot()
     dispatcher = create_dispatcher()
 
-    await bot.set_my_commands(
-        [
-            BotCommand(command="start", description="Приветствие"),
-            BotCommand(command="help", description="Как пользоваться"),
-        ]
-    )
-    # Сбрасываем вебхук, если бота раньше запускали в этом режиме.
-    await bot.delete_webhook(drop_pending_updates=True)
+    try:
+        await bot.set_my_commands(
+            [
+                BotCommand(command="start", description="Приветствие"),
+                BotCommand(command="help", description="Как пользоваться"),
+            ]
+        )
+        # Сбрасываем вебхук, если бота раньше запускали в этом режиме.
+        await bot.delete_webhook(drop_pending_updates=True)
 
-    log.info("бот запущен")
-    await dispatcher.start_polling(
-        bot,
-        allowed_updates=dispatcher.resolve_used_update_types(),
-    )
-
-    await bot.set_my_commands(
-        [
-            BotCommand(command="start", description="Приветствие"),
-            BotCommand(command="help", description="Как пользоваться"),
-        ]
-    )
-    # Сбрасываем вебхук, если бота раньше запускали в этом режиме.
-    await bot.delete_webhook(drop_pending_updates=True)
-
-    log.info("бот запущен")
-    await dispatcher.start_polling(
-        bot,
-        allowed_updates=dispatcher.resolve_used_update_types(),
-    )
+        log.info("бот запущен")
+        await dispatcher.start_polling(
+            bot,
+            allowed_updates=dispatcher.resolve_used_update_types(),
+        )
+    finally:
+        # Закрываем aiohttp-сессию, иначе на выходе будет «Unclosed client session».
+        await bot.session.close()
 
 
 if __name__ == "__main__":
