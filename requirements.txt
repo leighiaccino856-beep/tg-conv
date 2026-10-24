@@ -1,4 +1,6 @@
 aiogram>=3.13,<4
 python-dotenv>=1.0
+# Нужен для TELEGRAM_PROXY: aiogram использует его и для http-, и для socks-прокси.
+aiohttp-socks>=0.8
 # PyAV 19 несёт libav/libx264 в колесе и требует Python 3.12+.
 av>=19,<20

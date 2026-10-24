@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -37,6 +39,36 @@ def _env_float(name: str, default: float) -> float:
         raise SystemExit(f"Переменная {name} должна быть числом, получено: {raw!r}") from exc
 
 
+_PROXY_SCHEMES = {"http", "socks4", "socks5"}
+
+
+def _env_proxy() -> str | None:
+    """Прокси для Telegram: http://, socks4://, socks5://. Без схемы считаем http."""
+    raw = _env_str("TELEGRAM_PROXY")
+    if not raw:
+        return None
+    if "://" not in raw:
+        raw = f"http://{raw}"
+    parts = urlsplit(raw)
+    scheme = parts.scheme.lower()
+    if scheme not in _PROXY_SCHEMES:
+        allowed = ", ".join(sorted(_PROXY_SCHEMES))
+        raise SystemExit(
+            f"TELEGRAM_PROXY: неизвестная схема {scheme!r}. Поддерживаются: {allowed}."
+        )
+    if not parts.hostname:
+        raise SystemExit(f"TELEGRAM_PROXY: в адресе {raw!r} нет хоста.")
+    try:
+        port = parts.port
+    except ValueError as exc:
+        raise SystemExit(f"TELEGRAM_PROXY: некорректный порт в {raw!r}.") from exc
+    if port is None:
+        raise SystemExit(
+            f"TELEGRAM_PROXY: укажи порт, например {scheme}://{parts.hostname}:1080."
+        )
+    return raw
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Все настройки приложения."""
@@ -44,6 +76,7 @@ class Settings:
     bot_token: str
     api_server: str | None
     api_ip: str | None
+    proxy: str | None
     max_input_mb: int
     note_max_mb: float
     fallback_note_mb: float
@@ -60,6 +93,27 @@ class Settings:
         return self.max_input_mb * 1024 * 1024
 
     @property
+    def api_ips(self) -> tuple[str, ...]:
+        """IP из TELEGRAM_API_IP: можно указать несколько через запятую."""
+        if not self.api_ip:
+            return ()
+        ips: list[str] = []
+        for raw in self.api_ip.split(","):
+            candidate = raw.strip()
+            if not candidate:
+                continue
+            try:
+                ipaddress.ip_address(candidate)
+            except ValueError as exc:
+                raise SystemExit(
+                    f"TELEGRAM_API_IP: {candidate!r} — это не IP-адрес. "
+                    "Укажи IPv4, например 149.154.167.220."
+                ) from exc
+            if candidate not in ips:
+                ips.append(candidate)
+        return tuple(ips)
+
+    @property
     def note_max_bytes(self) -> int:
         return int(self.note_max_mb * 1024 * 1024)
 
@@ -74,6 +128,7 @@ class Settings:
             bot_token=_env_str("BOT_TOKEN"),
             api_server=api_server,
             api_ip=_env_str("TELEGRAM_API_IP") or None,
+            proxy=_env_proxy(),
             max_input_mb=max(1, _env_int("MAX_INPUT_MB", 20)),
             note_max_mb=max(0.1, _env_float("NOTE_MAX_MB", 5.0)),
             fallback_note_mb=max(0.1, _env_float("FALLBACK_NOTE_MB", 1.0)),
