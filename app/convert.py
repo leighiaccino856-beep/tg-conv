@@ -249,6 +249,7 @@ def _encode_once(
 
             audio_out = None
             resampler = None
+            audio_pts = 0
             if audio_in is not None:
                 audio_out = container.add_stream("aac", rate=44100)
                 audio_out.layout = "mono"
@@ -265,6 +266,22 @@ def _encode_once(
                     for packet in video_out.encode(frame):
                         container.mux(packet)
                     frames_written += 1
+
+            def flush_audio(in_frame: av.AudioFrame | None) -> None:
+                nonlocal audio_pts
+                if audio_out is None or resampler is None:
+                    return
+                if in_frame is not None:
+                    # В склеенных роликах и видео с edit-list у аудиокадров бывают
+                    # немонотонные PTS. Если передать их в ресемплер как есть,
+                    # он откатит выходной PTS назад и MP4-муксер упадёт с
+                    # «non monotonically increasing dts».
+                    in_frame.pts = None
+                for resampled in resampler.resample(in_frame):
+                    resampled.pts = audio_pts
+                    audio_pts += resampled.samples
+                    for packet in audio_out.encode(resampled):
+                        container.mux(packet)
 
             streams = [video_in] + ([audio_in] if audio_in is not None else [])
             video_done = False
@@ -302,9 +319,7 @@ def _encode_once(
                         if timestamp is not None and timestamp >= duration:
                             audio_done = True
                             continue
-                        for resampled in resampler.resample(frame):
-                            for packet in audio_out.encode(resampled):
-                                container.mux(packet)
+                        flush_audio(frame)
 
                 if video_done and audio_done:
                     break
@@ -315,9 +330,7 @@ def _encode_once(
                 container.mux(packet)
 
             if audio_out is not None and resampler is not None:
-                for resampled in resampler.resample(None):
-                    for packet in audio_out.encode(resampled):
-                        container.mux(packet)
+                flush_audio(None)
                 for packet in audio_out.encode(None):
                     container.mux(packet)
 
