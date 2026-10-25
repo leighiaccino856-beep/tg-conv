@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import socket
 from urllib.parse import urlsplit
 
+from aiohttp import web
 from aiohttp.abc import AbstractResolver
 from aiohttp.resolver import DefaultResolver
 
@@ -209,6 +211,33 @@ async def _poll(bot: Bot, dispatcher: Dispatcher) -> None:
             await asyncio.sleep(5)
 
 
+async def _start_health_server() -> web.AppRunner | None:
+    """Запускает минимальный HTTP health-check сервер, если задан PORT."""
+    port_str = os.getenv("PORT")
+    if not port_str:
+        return None
+    try:
+        port = int(port_str)
+    except ValueError:
+        log.warning("PORT=%r не является числом, health-server не запущен", port_str)
+        return None
+
+    app = web.Application()
+
+    async def _health_handler(_: web.Request) -> web.Response:
+        return web.Response(text="tg-conv is alive")
+
+    app.router.add_get("/", _health_handler)
+    app.router.add_get("/health", _health_handler)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    log.info("health server запущен на 0.0.0.0:%d", port)
+    return runner
+
+
 async def main() -> None:
     if not settings.bot_token:
         raise SystemExit(
@@ -220,6 +249,7 @@ async def main() -> None:
         format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
     )
 
+    runner = await _start_health_server()
     bot = _build_bot()
     dispatcher = create_dispatcher()
 
@@ -228,6 +258,8 @@ async def main() -> None:
         log.info("бот запущен")
         await _poll(bot, dispatcher)
     finally:
+        if runner is not None:
+            await runner.cleanup()
         # Закрываем aiohttp-сессию, иначе на выходе будет «Unclosed client session».
         await bot.session.close()
 
